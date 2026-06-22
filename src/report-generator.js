@@ -3,6 +3,7 @@
  * QA 검증 결과를 JSON / CSV 형식으로 reports 폴더에 저장한다.
  */
 
+import { formatResultStatus } from './link-validator.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -31,13 +32,12 @@ function escapeCsvField(value) {
 
 /**
  * 단일 검증 세션 결과를 CSV 문자열로 변환한다.
- * 컬럼: 검사날짜, 국가코드, 영역, CTA명, 링크경로, 최종URL, 통과실패, 실패원인
+ * 검사날짜는 파일/블록 상단에 별도 기록하므로 데이터 행에는 포함하지 않는다.
  * @param {object} sessionResult - runLinkCheck() 반환값
  * @returns {string} CSV 본문
  */
 function sessionToCsv(sessionResult) {
   const headers = [
-    '검사날짜',
     '국가코드',
     '영역',
     '디바이스',
@@ -49,14 +49,13 @@ function sessionToCsv(sessionResult) {
   ];
 
   const rows = sessionResult.results.map((r) => [
-    sessionResult.inspectedAt,
     sessionResult.countryCode,
     sessionResult.areaId,
     sessionResult.deviceLabel || sessionResult.deviceType || '',
     r.ctaName,
     r.linkPath,
     r.finalUrl || '',
-    r.status,
+    formatResultStatus(r.status),
     r.reason || '',
   ]);
 
@@ -69,6 +68,20 @@ function sessionToCsv(sessionResult) {
   ];
 
   return lines.join('\n');
+}
+
+/**
+ * 전체 세션 결과를 하나의 CSV 문자열로 조합한다.
+ * 검사날짜는 맨 위에 한 번만 기록한다.
+ * @param {object[]} allResults - 검증 세션 결과 배열
+ * @returns {string} CSV 본문
+ */
+function buildCsvContent(allResults) {
+  const inspectedAt = allResults[0]?.inspectedAt || new Date().toISOString();
+  const dateLine = `검사날짜,${escapeCsvField(inspectedAt)}`;
+  const sessionBlocks = allResults.map((session) => sessionToCsv(session));
+
+  return [dateLine, '', ...sessionBlocks].join('\n\n');
 }
 
 /**
@@ -103,9 +116,9 @@ function writeCsvReport(allResults, outputDir) {
   const filename = `link-qa-report_${timestamp}.csv`;
   const filePath = join(outputDir, filename);
 
-  const csvBlocks = allResults.map((session) => sessionToCsv(session));
-  const content = csvBlocks.join('\n\n');
-  writeFileSync(filePath, content, 'utf-8');
+  const content = buildCsvContent(allResults);
+  // Excel(Windows)에서 UTF-8 한글이 깨지지 않도록 BOM 추가
+  writeFileSync(filePath, `\uFEFF${content}`, 'utf-8');
   return filePath;
 }
 
@@ -143,23 +156,28 @@ export function printSummary(allResults) {
   let totalPassed = 0;
   let totalFailed = 0;
   let totalSkipped = 0;
+  let totalNeedsCheck = 0;
 
   for (const session of allResults) {
     const { summary } = session;
     totalPassed += summary.passed;
     totalFailed += summary.failed;
     totalSkipped += summary.skipped;
+    totalNeedsCheck += summary.needsCheck ?? 0;
 
     const deviceLabel = session.deviceLabel || session.deviceType || '';
+    const needsCheckPart =
+      (summary.needsCheck ?? 0) > 0 ? ` | 체크필요 ${summary.needsCheck}` : '';
     console.log(
       `[${session.countryCode}] ${session.areaId} (${deviceLabel}): ` +
-        `총 ${summary.total} | Pass ${summary.passed} | Fail ${summary.failed} | Skip ${summary.skipped}`
+        `총 ${summary.total} | Pass ${summary.passed} | Fail ${summary.failed} | Skip ${summary.skipped}${needsCheckPart}`
     );
   }
 
   console.log('----------------------------------');
+  const needsCheckTotalPart = totalNeedsCheck > 0 ? ` | 체크필요 ${totalNeedsCheck}` : '';
   console.log(
-    `전체: Pass ${totalPassed} | Fail ${totalFailed} | Skip ${totalSkipped}`
+    `전체: Pass ${totalPassed} | Fail ${totalFailed} | Skip ${totalSkipped}${needsCheckTotalPart}`
   );
   console.log('==================================\n');
 }

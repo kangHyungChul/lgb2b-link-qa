@@ -8,7 +8,7 @@
  */
 
 import { chromium } from 'playwright';
-import { shouldSkipLink, determineResult, extractPathPrefixFromBaseUrl } from './link-validator.js';
+import { shouldSkipLink, determineResult, extractPathPrefixFromBaseUrl, isBlankTarget } from './link-validator.js';
 import { resolveShowBrowser } from './progress-display.js';
 
 /**
@@ -83,7 +83,7 @@ function formatErrorMessage(error) {
  * CTA명은 링크 텍스트 → aria-label → title 순으로 fallback한다.
  * @param {import('playwright').Page} page
  * @param {string} areaSelector
- * @returns {Promise<Array<{ index: number, href: string, ctaName: string, selector: string, absoluteUrl: string }>>}
+ * @returns {Promise<Array<{ index: number, href: string, ctaName: string, selector: string, absoluteUrl: string, target: string|null, isNewTab: boolean }>>}
  */
 async function collectLinks(page, areaSelector, baseUrl) {
   const rawLinks = await page.evaluate((selector) => {
@@ -104,6 +104,8 @@ async function collectLinks(page, areaSelector, baseUrl) {
       return {
         index,
         href: anchor.getAttribute('href') || '',
+        // target="_blank" 여부 판별용 (navigate 모드에서도 새 창 링크 완화 규칙 적용)
+        target: anchor.getAttribute('target'),
         ctaName,
         selector: `${selector} a[href][${attrName}="${index}"]`,
       };
@@ -113,6 +115,7 @@ async function collectLinks(page, areaSelector, baseUrl) {
   return rawLinks.map((link) => ({
     ...link,
     absoluteUrl: resolveAbsoluteUrl(link.href, baseUrl),
+    isNewTab: isBlankTarget(link.target),
   }));
 }
 
@@ -120,7 +123,7 @@ async function collectLinks(page, areaSelector, baseUrl) {
  * navigate 모드: href 절대 URL로 직접 이동하여 검증한다.
  * GNB 드롭다운처럼 DOM에 있지만 hidden인 링크도 검증 가능하다.
  */
-async function verifyByNavigate(page, absoluteUrl, country, settings, timeout) {
+async function verifyByNavigate(page, absoluteUrl, country, settings, timeout, isNewTab = false) {
   const response = await page.goto(absoluteUrl, {
     waitUntil: 'domcontentloaded',
     timeout,
@@ -144,6 +147,7 @@ async function verifyByNavigate(page, absoluteUrl, country, settings, timeout) {
     allowedDomains: country.allowedDomains,
     pathPrefix,
     errorDetection: settings.errorDetection,
+    isNewTab,
   });
 }
 
@@ -163,8 +167,9 @@ async function verifyByClick(page, context, link, country, settings, timeout) {
   let pageInfo = { url: finalUrl, title: '', bodyText: '' };
   let popupPage = null;
 
-  const target = await linkLocator.getAttribute('target');
-  const isNewTab = target === '_blank';
+  // 수집 단계에서 파악한 isNewTab 우선, 없으면 DOM에서 target 재확인
+  const isNewTab =
+    link.isNewTab ?? isBlankTarget(await linkLocator.getAttribute('target'));
 
   if (isNewTab) {
     const [popup] = await Promise.all([
@@ -191,8 +196,15 @@ async function verifyByClick(page, context, link, country, settings, timeout) {
     const isVisible = await linkLocator.isVisible().catch(() => false);
 
     if (!isVisible) {
-      // hidden 링크는 click 불가 → navigate fallback
-      const navResult = await verifyByNavigate(page, link.absoluteUrl, country, settings, timeout);
+      // hidden 링크는 click 불가 → navigate fallback (새 창 여부 전달)
+      const navResult = await verifyByNavigate(
+        page,
+        link.absoluteUrl,
+        country,
+        settings,
+        timeout,
+        isNewTab
+      );
       return { ...navResult, finalUrl: page.url() };
     }
 
@@ -225,6 +237,7 @@ async function verifyByClick(page, context, link, country, settings, timeout) {
     allowedDomains: country.allowedDomains,
     pathPrefix,
     errorDetection: settings.errorDetection,
+    isNewTab,
   });
 
   return { ...result, finalUrl };
@@ -255,7 +268,14 @@ async function verifySingleLink(page, context, link, country, settings, timeout,
       result = clickResult;
       finalUrl = clickResult.finalUrl;
     } else {
-      result = await verifyByNavigate(page, link.absoluteUrl, country, settings, timeout);
+      result = await verifyByNavigate(
+        page,
+        link.absoluteUrl,
+        country,
+        settings,
+        timeout,
+        link.isNewTab
+      );
       finalUrl = page.url();
     }
 
@@ -331,7 +351,7 @@ export async function runLinkCheck(country, area, settings, options = {}) {
     deviceLabel,
     areaSelector,
     verificationMode,
-    summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+    summary: { total: 0, passed: 0, failed: 0, skipped: 0, needsCheck: 0 },
     results: [],
   };
 
@@ -401,7 +421,7 @@ export async function runLinkCheck(country, area, settings, options = {}) {
         continue;
       }
 
-      if (settings.linkFilter.skipExternalDomains) {
+      if (settings.linkFilter.skipExternalDomains && !link.isNewTab) {
         try {
           const hostname = new URL(link.absoluteUrl).hostname.toLowerCase();
           const isInternal = country.allowedDomains.some(
@@ -432,6 +452,8 @@ export async function runLinkCheck(country, area, settings, options = {}) {
         }
       }
 
+      // 새 창(_blank) + 외부 도메인: skipExternalDomains 설정과 무관하게 검증 후 needs_check 처리
+
       const result = await verifySingleLink(
         page,
         context,
@@ -446,6 +468,8 @@ export async function runLinkCheck(country, area, settings, options = {}) {
 
       if (result.status === 'pass') {
         sessionResult.summary.passed++;
+      } else if (result.status === 'needs_check') {
+        sessionResult.summary.needsCheck++;
       } else {
         sessionResult.summary.failed++;
       }

@@ -4,6 +4,31 @@
  */
 
 /**
+ * 내부 status 코드를 리포트/CLI 표시용 라벨로 변환한다.
+ * needs_check → '체크필요' (새창 링크의 외부·타국가 도메인 등 수동 확인 대상)
+ * @param {string} status - pass | fail | skipped | needs_check
+ * @returns {string} 표시용 결과 라벨
+ */
+export function formatResultStatus(status) {
+  const labels = {
+    pass: 'pass',
+    fail: 'fail',
+    skipped: 'skipped',
+    needs_check: '체크필요',
+  };
+  return labels[status] ?? status;
+}
+
+/**
+ * a 태그 target 속성이 새 창(_blank)으로 열리는지 판별한다.
+ * @param {string|null|undefined} target - a 태그의 target 속성값
+ * @returns {boolean} 새 창 링크이면 true
+ */
+export function isBlankTarget(target) {
+  return (target || '').trim().toLowerCase() === '_blank';
+}
+
+/**
  * URL에서 호스트명만 추출한다 (포트 제외, 소문자 정규화).
  * @param {string} urlString - 검사할 URL
  * @returns {string|null} 호스트명 또는 파싱 실패 시 null
@@ -189,9 +214,26 @@ export function detectErrorPage(pageInfo, errorDetection) {
 }
 
 /**
- * 단일 링크 검증 결과를 종합하여 pass/fail을 결정한다.
+ * 도메인/국가 경로 검증 실패 시 새 창 링크면 fail 대신 needs_check(체크필요)로 완화한다.
+ * HTTP 에러·에러 페이지는 새 창 여부와 관계없이 항상 fail.
+ * @param {'fail'|'needs_check'} strictStatus - isNewTab이 false일 때 사용할 status
+ * @param {boolean} isNewTab - target="_blank" 새 창 링크 여부
+ * @param {string} reason - 실패/체크필요 사유
+ * @returns {{ status: 'fail'|'needs_check', reason: string }}
+ */
+function resolveDomainOrPathResult(strictStatus, isNewTab, reason) {
+  if (isNewTab) {
+    // 새 창 링크: 외부·타국가 도메인은 허용하되 수동 확인 대상으로 표시
+    return { status: 'needs_check', reason };
+  }
+  return { status: strictStatus, reason };
+}
+
+/**
+ * 단일 링크 검증 결과를 종합하여 pass/fail/needs_check를 결정한다.
  * @param {object} params - 검증에 필요한 모든 데이터
- * @returns {{ status: 'pass'|'fail', reason: string|null }}
+ * @param {boolean} [params.isNewTab=false] - target="_blank" 새 창 링크 여부
+ * @returns {{ status: 'pass'|'fail'|'needs_check', reason: string|null }}
  */
 export function determineResult({
   httpStatus,
@@ -200,8 +242,9 @@ export function determineResult({
   allowedDomains,
   pathPrefix,
   errorDetection,
+  isNewTab = false,
 }) {
-  // 1. HTTP 상태 코드 검사
+  // 1. HTTP 상태 코드 검사 (새 창 여부와 무관하게 fail)
   const httpCheck = validateHttpStatus(httpStatus, errorDetection.httpStatusCodes);
   if (httpCheck.isError) {
     return { status: 'fail', reason: httpCheck.reason };
@@ -210,16 +253,16 @@ export function determineResult({
   // 2. 도메인 검사 (허용 도메인 외부 이동 여부)
   const domainCheck = validateDomain(finalUrl, allowedDomains);
   if (!domainCheck.valid) {
-    return { status: 'fail', reason: domainCheck.reason };
+    return resolveDomainOrPathResult('fail', isNewTab, domainCheck.reason);
   }
 
   // 3. 국가 경로 검사 (같은 도메인 내 다른 국가 경로 이동 여부, 예: /uk/ → /global/)
   const pathCheck = validateCountryPath(finalUrl, pathPrefix);
   if (!pathCheck.valid) {
-    return { status: 'fail', reason: pathCheck.reason };
+    return resolveDomainOrPathResult('fail', isNewTab, pathCheck.reason);
   }
 
-  // 4. 에러 페이지 패턴 검사
+  // 4. 에러 페이지 패턴 검사 (새 창 여부와 무관하게 fail)
   const errorCheck = detectErrorPage(pageInfo, errorDetection);
   if (errorCheck.isError) {
     return { status: 'fail', reason: errorCheck.reason };

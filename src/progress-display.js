@@ -80,7 +80,7 @@ export class ProgressTracker {
    * @param {object} params
    * @param {number} params.index - 현재 링크 순번 (1-based)
    * @param {number} params.total - 전체 링크 수
-   * @param {string} params.status - pass | fail | skipped
+   * @param {string} params.status - pass | fail | skipped | needs_check
    * @param {string} params.ctaName - CTA명
    * @param {string} params.href - 링크 경로
    * @param {string|null} params.reason - 실패/스킵 사유
@@ -88,7 +88,7 @@ export class ProgressTracker {
   logLinkResult({ index, total, status, ctaName, href, reason }) {
     this.linkCurrent = index;
 
-    const statusIcon = { pass: '✓', fail: '✗', skipped: '−' }[status] ?? '?';
+    const statusIcon = { pass: '✓', fail: '✗', skipped: '−', needs_check: '?' }[status] ?? '?';
     const prefix = `[${index}/${total}]`;
 
     console.log(
@@ -103,11 +103,13 @@ export class ProgressTracker {
 
   /**
    * 세션 완료 요약 출력
-   * @param {{ passed: number, failed: number, skipped: number, total: number }} summary
+   * @param {{ passed: number, failed: number, skipped: number, needsCheck?: number, total: number }} summary
    */
   logSessionComplete(summary) {
+    const needsCheckPart =
+      (summary.needsCheck ?? 0) > 0 ? ` | 체크필요 ${summary.needsCheck}` : '';
     console.log(
-      `  ✅ 완료 — Pass ${summary.passed} | Fail ${summary.failed} | Skip ${summary.skipped} (총 ${summary.total})`
+      `  ✅ 완료 — Pass ${summary.passed} | Fail ${summary.failed} | Skip ${summary.skipped}${needsCheckPart} (총 ${summary.total})`
     );
   }
 
