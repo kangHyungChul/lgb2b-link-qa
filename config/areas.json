@@ -1,0 +1,20 @@
+{
+  "areas": [
+    {
+      "id": "GNB",
+      "name": "Global Navigation Bar",
+      "selectors": {
+        "pc": ".CM0001 .c-gnb__desktop",
+        "mobile": ".CM0001 .c-gnb__mobile"
+      }
+    },
+    {
+      "id": "Footer",
+      "name": "Footer",
+      "selectors": {
+        "pc": ".CM0002.c-footer",
+        "mobile": ""
+      }
+    }
+  ]
+}

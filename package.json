@@ -1,0 +1,21 @@
+{
+  "name": "link-qa",
+  "version": "1.0.0",
+  "description": "Playwright 기반 링크 QA 자동 검증 도구",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "qa": "node src/index.js",
+    "qa:install": "npx playwright install chromium"
+  },
+  "keywords": [
+    "playwright",
+    "qa",
+    "link-checker"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@inquirer/prompts": "^8.5.2",
+    "playwright": "^1.52.0"
+  }
+}
