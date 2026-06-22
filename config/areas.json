@@ -12,7 +12,7 @@
       "id": "Footer",
       "name": "Footer",
       "selectors": {
-        "pc": ".CM0002.c-footer",
+        "pc": ".CM0002 .c-footer",
         "mobile": ""
       }
     }
