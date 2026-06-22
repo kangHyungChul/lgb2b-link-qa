@@ -7,42 +7,6 @@
       "allowedDomains": ["www.lg.com", "lg.com", "partner.lge.com", "ncms-btb-pub.gp1.aws.lge.com", "sso.lge.com"]
     },
     {
-      "code": "in",
-      "name": "India",
-      "baseUrl": "https://ncms-btb-pub.gp1.aws.lge.com/in/business/",
-      "allowedDomains": ["www.lg.com", "lg.com", "partner.lge.com", "ncms-btb-pub.gp1.aws.lge.com", "sso.lge.com"]
-    },
-    {
-      "code": "br",
-      "name": "Brazil",
-      "baseUrl": "https://ncms-btb-pub.gp1.aws.lge.com/br/business/",
-      "allowedDomains": ["www.lg.com", "lg.com", "partner.lge.com", "ncms-btb-pub.gp1.aws.lge.com", "sso.lge.com"]
-    },
-    {
-      "code": "au",
-      "name": "Australia",
-      "baseUrl": "https://ncms-btb-pub.gp1.aws.lge.com/au/business/",
-      "allowedDomains": ["www.lg.com", "lg.com", "partner.lge.com", "ncms-btb-pub.gp1.aws.lge.com", "sso.lge.com"]
-    },
-    {
-      "code": "de",
-      "name": "Germany",
-      "baseUrl": "https://ncms-btb-pub.gp1.aws.lge.com/de/business/",
-      "allowedDomains": ["www.lg.com", "lg.com", "partner.lge.com", "ncms-btb-pub.gp1.aws.lge.com", "sso.lge.com"]
-    },
-    {
-      "code": "sa",
-      "name": "Saudi Arabia",
-      "baseUrl": "https://ncms-btb-pub.gp1.aws.lge.com/sa/business/",
-      "allowedDomains": ["www.lg.com", "lg.com", "partner.lge.com", "ncms-btb-pub.gp1.aws.lge.com", "sso.lge.com"]
-    },
-    {
-      "code": "sa_en",
-      "name": "Saudi Arabia (EN)",
-      "baseUrl": "https://ncms-btb-pub.gp1.aws.lge.com/sa_en/business/",
-      "allowedDomains": ["www.lg.com", "lg.com", "partner.lge.com", "ncms-btb-pub.gp1.aws.lge.com", "sso.lge.com"]
-    },
-    {
       "code": "th",
       "name": "Thailand",
       "baseUrl": "https://ncms-btb-pub.gp1.aws.lge.com/th/business/",
