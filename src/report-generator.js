@@ -7,14 +7,61 @@ import { formatResultStatus } from './link-validator.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+/** 리포트·파일명에 사용하는 한국 표준시 타임존 */
+const KST_TIMEZONE = 'Asia/Seoul';
+
 /**
- * ISO 날짜 문자열을 파일명용 형식으로 변환한다.
- * 예: 2026-06-22T10:30:00.000Z → 2026-06-22_10-30-00
- * @param {string} isoString - ISO 8601 날짜
- * @returns {string} 파일명용 타임스탬프
+ * Date 또는 ISO 문자열을 한국 시간(KST) 기준 연·월·일·시·분·초로 분해한다.
+ * @param {string|Date} dateInput - ISO 8601 문자열 또는 Date 객체
+ * @returns {{ year: string, month: string, day: string, hour: string, minute: string, second: string }}
  */
-function toFileTimestamp(isoString) {
-  return isoString.replace(/[:.]/g, '-').slice(0, 19);
+function toKstParts(dateInput) {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: KST_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const parts = Object.fromEntries(
+    formatter.formatToParts(date).map((part) => [part.type, part.value])
+  );
+
+  return {
+    year: parts.year,
+    month: parts.month,
+    day: parts.day,
+    hour: parts.hour,
+    minute: parts.minute,
+    second: parts.second,
+  };
+}
+
+/**
+ * 한국 시간 기준 표시용 날짜 문자열 (CSV 검사날짜 등)
+ * 예: 2026-06-22 19:30:00
+ * @param {string|Date} dateInput - ISO 8601 문자열 또는 Date 객체
+ * @returns {string}
+ */
+function formatKstDateTime(dateInput) {
+  const { year, month, day, hour, minute, second } = toKstParts(dateInput);
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
+/**
+ * 한국 시간 기준 파일명용 타임스탬프
+ * 예: 2026-06-22_19-30-00
+ * @param {string|Date} dateInput - ISO 8601 문자열 또는 Date 객체
+ * @returns {string}
+ */
+function toKstFileTimestamp(dateInput) {
+  const { year, month, day, hour, minute, second } = toKstParts(dateInput);
+  return `${year}-${month}-${day}_${hour}-${minute}-${second}`;
 }
 
 /**
@@ -78,7 +125,7 @@ function sessionToCsv(sessionResult) {
  */
 function buildCsvContent(allResults) {
   const inspectedAt = allResults[0]?.inspectedAt || new Date().toISOString();
-  const dateLine = `검사날짜,${escapeCsvField(inspectedAt)}`;
+  const dateLine = `검사날짜,${escapeCsvField(formatKstDateTime(inspectedAt))}`;
   const sessionBlocks = allResults.map((session) => sessionToCsv(session));
 
   return [dateLine, '', ...sessionBlocks].join('\n\n');
@@ -91,12 +138,14 @@ function buildCsvContent(allResults) {
  * @returns {string} 저장된 파일 경로
  */
 function writeJsonReport(allResults, outputDir) {
-  const timestamp = toFileTimestamp(allResults[0]?.inspectedAt || new Date().toISOString());
+  const reportDate = allResults[0]?.inspectedAt || new Date();
+  const timestamp = toKstFileTimestamp(reportDate);
   const filename = `link-qa-report_${timestamp}.json`;
   const filePath = join(outputDir, filename);
 
   const report = {
-    generatedAt: new Date().toISOString(),
+    generatedAt: formatKstDateTime(new Date()),
+    generatedAtTimezone: 'Asia/Seoul',
     totalSessions: allResults.length,
     sessions: allResults,
   };
@@ -112,7 +161,8 @@ function writeJsonReport(allResults, outputDir) {
  * @returns {string} 저장된 파일 경로
  */
 function writeCsvReport(allResults, outputDir) {
-  const timestamp = toFileTimestamp(allResults[0]?.inspectedAt || new Date().toISOString());
+  const reportDate = allResults[0]?.inspectedAt || new Date();
+  const timestamp = toKstFileTimestamp(reportDate);
   const filename = `link-qa-report_${timestamp}.csv`;
   const filePath = join(outputDir, filename);
 
@@ -123,23 +173,48 @@ function writeCsvReport(allResults, outputDir) {
 }
 
 /**
- * settings.report.formats 에 따라 JSON/CSV 리포트를 생성한다.
+ * settings.report 설정에서 JSON/CSV 생성 여부를 해석한다.
+ * - json / csv boolean 우선 (기본값: json false, csv true)
+ * - formats 배열은 하위 호환용
+ * @param {object} reportConfig - settings.json의 report 객체
+ * @returns {{ outputDir: string, json: boolean, csv: boolean }}
+ */
+function resolveReportOptions(reportConfig = {}) {
+  const outputDir = reportConfig.outputDir || 'reports';
+
+  // legacy: formats: ["json", "csv"]
+  if (Array.isArray(reportConfig.formats)) {
+    return {
+      outputDir,
+      json: reportConfig.formats.includes('json'),
+      csv: reportConfig.formats.includes('csv'),
+    };
+  }
+
+  return {
+    outputDir,
+    json: reportConfig.json ?? false,
+    csv: reportConfig.csv ?? true,
+  };
+}
+
+/**
+ * settings.report 설정에 따라 JSON/CSV 리포트를 생성한다.
  * @param {object[]} allResults - 전체 검증 세션 결과
  * @param {object} reportConfig - settings.json의 report 객체
  * @returns {string[]} 생성된 파일 경로 목록
  */
 export function generateReports(allResults, reportConfig) {
-  const outputDir = reportConfig.outputDir || 'reports';
+  const { outputDir, json, csv } = resolveReportOptions(reportConfig);
   mkdirSync(outputDir, { recursive: true });
 
   const savedFiles = [];
-  const formats = reportConfig.formats || ['json'];
 
-  if (formats.includes('json')) {
+  if (json) {
     savedFiles.push(writeJsonReport(allResults, outputDir));
   }
 
-  if (formats.includes('csv')) {
+  if (csv) {
     savedFiles.push(writeCsvReport(allResults, outputDir));
   }
 

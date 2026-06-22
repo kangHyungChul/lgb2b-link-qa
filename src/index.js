@@ -118,9 +118,13 @@ async function main() {
   printSummary(allResults);
 
   const savedFiles = generateReports(allResults, configs.settings.report);
-  console.log('리포트 저장 완료:');
-  for (const file of savedFiles) {
-    console.log(`  → ${file}`);
+  if (savedFiles.length > 0) {
+    console.log('리포트 저장 완료:');
+    for (const file of savedFiles) {
+      console.log(`  → ${file}`);
+    }
+  } else {
+    console.log('리포트 파일 생성 없음 (settings.report.json / settings.report.csv 확인)');
   }
 
   const hasFailure = allResults.some((r) => r.summary.failed > 0);

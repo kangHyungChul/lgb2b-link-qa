@@ -29,6 +29,7 @@
   },
   "report": {
     "outputDir": "reports",
-    "formats": ["json", "csv"]
+    "json": false,
+    "csv": true
   }
 }
