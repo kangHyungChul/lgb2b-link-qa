@@ -5,7 +5,7 @@
 
 /**
  * 내부 status 코드를 리포트/CLI 표시용 라벨로 변환한다.
- * needs_check → '체크필요' (새창 링크의 외부·타국가 도메인 등 수동 확인 대상)
+ * needs_check → '체크필요' (새창 링크의 외부 도메인 등 수동 확인 대상)
  * @param {string} status - pass | fail | skipped | needs_check
  * @returns {string} 표시용 결과 라벨
  */
@@ -226,19 +226,30 @@ export function detectErrorPage(pageInfo, errorDetection) {
 }
 
 /**
- * 도메인/국가 경로 검증 실패 시 새 창 링크면 fail 대신 needs_check(체크필요)로 완화한다.
- * HTTP 에러·에러 페이지는 새 창 여부와 관계없이 항상 fail.
- * @param {'fail'|'needs_check'} strictStatus - isNewTab이 false일 때 사용할 status
- * @param {boolean} isNewTab - target="_blank" 새 창 링크 여부
- * @param {string} reason - 실패/체크필요 사유
+ * 도메인 검증 실패 시 새 창 링크면 fail 대신 needs_check(체크필요)로 완화한다.
+ * @param {boolean} isNewTab
+ * @param {string} reason
  * @returns {{ status: 'fail'|'needs_check', reason: string }}
  */
-function resolveDomainOrPathResult(strictStatus, isNewTab, reason) {
+function resolveExternalDomainResult(isNewTab, reason) {
   if (isNewTab) {
-    // 새 창 링크: 외부·타국가 도메인은 허용하되 수동 확인 대상으로 표시
     return { status: 'needs_check', reason };
   }
-  return { status: strictStatus, reason };
+  return { status: 'fail', reason };
+}
+
+/**
+ * 국가 경로 검증 실패 시 새 창 링크면 pass(허용), 같은 탭이면 fail.
+ * @param {boolean} isNewTab
+ * @param {string} reason
+ * @returns {{ status: 'pass'|'fail', reason: string|null }}
+ */
+function resolveCountryPathResult(isNewTab, reason) {
+  if (isNewTab) {
+    // 새 창: /uk/ → /global/ 등 타국가 경로 이동 허용
+    return { status: 'pass', reason: null };
+  }
+  return { status: 'fail', reason };
 }
 
 /**
@@ -262,16 +273,16 @@ export function determineResult({
     return { status: 'fail', reason: httpCheck.reason };
   }
 
-  // 2. 도메인 검사 (허용 도메인 외부 이동 여부)
+  // 2. 도메인 검사 (허용 도메인 외부 — 새 창이면 체크필요, 같은 탭이면 fail)
   const domainCheck = validateDomain(finalUrl, allowedDomains);
   if (!domainCheck.valid) {
-    return resolveDomainOrPathResult('fail', isNewTab, domainCheck.reason);
+    return resolveExternalDomainResult(isNewTab, domainCheck.reason);
   }
 
-  // 3. 국가 경로 검사 (같은 도메인 내 다른 국가 경로 이동 여부, 예: /uk/ → /global/)
+  // 3. 국가 경로 검사 (같은 도메인 내 /uk/ → /global/ 등 — 새 창이면 pass 허용)
   const pathCheck = validateCountryPath(finalUrl, pathPrefix);
   if (!pathCheck.valid) {
-    return resolveDomainOrPathResult('fail', isNewTab, pathCheck.reason);
+    return resolveCountryPathResult(isNewTab, pathCheck.reason);
   }
 
   // 4. 에러 페이지 패턴 검사 (새 창 여부와 무관하게 fail)
