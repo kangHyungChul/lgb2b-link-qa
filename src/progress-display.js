@@ -119,14 +119,16 @@ export class ProgressTracker {
    * @param {Array} inspectionTasks - expandInspectionTasks() 결과
    * @param {boolean} showBrowser
    */
-  static logRunStart(countryCount, areaCount, inspectionTasks, showBrowser) {
+  static logRunStart(countryCount, areaCount, inspectionTasks, showBrowser, parallelCountries = false) {
     const deviceSummary = inspectionTasks
       .map((t) => `${t.area.id}(${t.deviceLabel})`)
       .join(', ');
 
+    const parallelLabel = parallelCountries && countryCount > 1 ? ' | 국가 병렬: ON' : '';
+
     console.log('\n========================================');
     console.log('  Link QA 검증 실행');
-    console.log(`  국가 ${countryCount}개 × 검사 ${inspectionTasks.length}건 (영역 ${areaCount}개)`);
+    console.log(`  국가 ${countryCount}개 × 검사 ${inspectionTasks.length}건 (영역 ${areaCount}개)${parallelLabel}`);
     console.log(`  검사 대상: ${deviceSummary}`);
     console.log(`  브라우저: ${showBrowser ? '표시 (Headed)' : '숨김 (Headless)'}`);
     console.log('========================================');

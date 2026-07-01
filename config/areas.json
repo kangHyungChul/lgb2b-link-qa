@@ -15,6 +15,15 @@
         "pc": ".CM0002 .c-footer",
         "mobile": ""
       }
+    },
+    {
+      "id": "Sitemap",
+      "name": "Sitemap",
+      "path": "/sitemap",
+      "selectors": {
+        "pc": ".CM0005B .c-sitemap",
+        "mobile": ""
+      }
     }
   ]
 }

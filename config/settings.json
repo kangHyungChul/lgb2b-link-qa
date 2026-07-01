@@ -5,6 +5,9 @@
     "areaWaitTimeout": 30000,
     "verificationMode": "navigate"
   },
+  "execution": {
+    "parallelCountries": false
+  },
   "viewports": {
     "pc": {
       "width": 1920,

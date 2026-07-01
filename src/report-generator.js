@@ -77,6 +77,10 @@ function escapeCsvField(value) {
   return str;
 }
 
+function formatNewTabLabel(isNewTab) {
+  return isNewTab ? 'Y' : 'N';
+}
+
 /**
  * 단일 검증 세션 결과를 CSV 문자열로 변환한다.
  * 검사날짜는 파일/블록 상단에 별도 기록하므로 데이터 행에는 포함하지 않는다.
@@ -90,6 +94,7 @@ function sessionToCsv(sessionResult) {
     '디바이스',
     'CTA명',
     '링크경로',
+    '새창',
     '최종URL',
     '결과',
     '실패원인',
@@ -101,6 +106,7 @@ function sessionToCsv(sessionResult) {
     sessionResult.deviceLabel || sessionResult.deviceType || '',
     r.ctaName,
     r.linkPath,
+    formatNewTabLabel(r.isNewTab),
     r.finalUrl || '',
     formatResultStatus(r.status),
     r.reason || '',
@@ -132,22 +138,53 @@ function buildCsvContent(allResults) {
 }
 
 /**
+ * 세션 결과를 국가코드별로 그룹화한다.
+ * @param {object[]} allResults
+ * @returns {Map<string, object[]>}
+ */
+function groupResultsByCountry(allResults) {
+  const groups = new Map();
+
+  for (const session of allResults) {
+    const code = session.countryCode;
+    if (!groups.has(code)) {
+      groups.set(code, []);
+    }
+    groups.get(code).push(session);
+  }
+
+  return groups;
+}
+
+/**
+ * 리포트 파일명을 생성한다. (국가코드 suffix 포함)
+ * @param {string} timestamp - KST 파일명용 타임스탬프
+ * @param {string} countryCode - 국가 코드
+ * @param {'json'|'csv'} ext
+ */
+function buildReportFilename(timestamp, countryCode, ext) {
+  return `link-qa-report_${timestamp}_${countryCode}.${ext}`;
+}
+
+/**
  * 여러 세션 결과를 하나의 JSON 리포트 파일로 저장한다.
- * @param {object[]} allResults - 검증 세션 결과 배열
- * @param {string} outputDir - 저장 디렉터리 경로
+ * @param {object[]} countryResults - 단일 국가의 검증 세션 결과
+ * @param {string} outputDir
+ * @param {string} countryCode
  * @returns {string} 저장된 파일 경로
  */
-function writeJsonReport(allResults, outputDir) {
-  const reportDate = allResults[0]?.inspectedAt || new Date();
+function writeJsonReport(countryResults, outputDir, countryCode) {
+  const reportDate = countryResults[0]?.inspectedAt || new Date();
   const timestamp = toKstFileTimestamp(reportDate);
-  const filename = `link-qa-report_${timestamp}.json`;
+  const filename = buildReportFilename(timestamp, countryCode, 'json');
   const filePath = join(outputDir, filename);
 
   const report = {
     generatedAt: formatKstDateTime(new Date()),
     generatedAtTimezone: 'Asia/Seoul',
-    totalSessions: allResults.length,
-    sessions: allResults,
+    countryCode,
+    totalSessions: countryResults.length,
+    sessions: countryResults,
   };
 
   writeFileSync(filePath, JSON.stringify(report, null, 2), 'utf-8');
@@ -156,18 +193,18 @@ function writeJsonReport(allResults, outputDir) {
 
 /**
  * 여러 세션 결과를 하나의 CSV 리포트 파일로 저장한다.
- * @param {object[]} allResults - 검증 세션 결과 배열
- * @param {string} outputDir - 저장 디렉터리 경로
+ * @param {object[]} countryResults - 단일 국가의 검증 세션 결과
+ * @param {string} outputDir
+ * @param {string} countryCode
  * @returns {string} 저장된 파일 경로
  */
-function writeCsvReport(allResults, outputDir) {
-  const reportDate = allResults[0]?.inspectedAt || new Date();
+function writeCsvReport(countryResults, outputDir, countryCode) {
+  const reportDate = countryResults[0]?.inspectedAt || new Date();
   const timestamp = toKstFileTimestamp(reportDate);
-  const filename = `link-qa-report_${timestamp}.csv`;
+  const filename = buildReportFilename(timestamp, countryCode, 'csv');
   const filePath = join(outputDir, filename);
 
-  const content = buildCsvContent(allResults);
-  // Excel(Windows)에서 UTF-8 한글이 깨지지 않도록 BOM 추가
+  const content = buildCsvContent(countryResults);
   writeFileSync(filePath, `\uFEFF${content}`, 'utf-8');
   return filePath;
 }
@@ -209,13 +246,16 @@ export function generateReports(allResults, reportConfig) {
   mkdirSync(outputDir, { recursive: true });
 
   const savedFiles = [];
+  const countryGroups = groupResultsByCountry(allResults);
 
-  if (json) {
-    savedFiles.push(writeJsonReport(allResults, outputDir));
-  }
+  for (const [countryCode, countryResults] of countryGroups) {
+    if (json) {
+      savedFiles.push(writeJsonReport(countryResults, outputDir, countryCode));
+    }
 
-  if (csv) {
-    savedFiles.push(writeCsvReport(allResults, outputDir));
+    if (csv) {
+      savedFiles.push(writeCsvReport(countryResults, outputDir, countryCode));
+    }
   }
 
   return savedFiles;

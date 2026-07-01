@@ -250,6 +250,7 @@ async function verifySingleLink(page, context, link, country, settings, timeout,
   const baseRecord = {
     ctaName: link.ctaName,
     linkPath: link.href,
+    isNewTab: link.isNewTab ?? false,
     status: 'fail',
     reason: null,
     finalUrl: null,
@@ -331,6 +332,7 @@ export async function runLinkCheck(country, area, settings, options = {}) {
   const deviceType = options.device ?? 'pc';
   const deviceLabel = options.deviceLabel ?? (deviceType === 'mobile' ? 'Mobile' : 'PC');
   const areaSelector = options.selector ?? area.selector;
+  const inspectionBaseUrl = options.baseUrl ?? country.baseUrl;
 
   if (!areaSelector) {
     throw new Error(`영역 "${area.id}" (${deviceLabel}) selector가 설정되지 않았습니다.`);
@@ -344,7 +346,8 @@ export async function runLinkCheck(country, area, settings, options = {}) {
     inspectedAt: new Date().toISOString(),
     countryCode: country.code,
     countryName: country.name,
-    baseUrl: country.baseUrl,
+    baseUrl: inspectionBaseUrl,
+    areaPath: options.areaPath ?? area.path ?? null,
     areaId: area.id,
     areaName: area.name,
     deviceType,
@@ -356,12 +359,12 @@ export async function runLinkCheck(country, area, settings, options = {}) {
   };
 
   try {
-    progress?.logPageLoading(country.baseUrl);
+    progress?.logPageLoading(inspectionBaseUrl);
     console.log(`  📱 디바이스: ${deviceLabel} (${deviceType}) | viewport 적용`);
 
     // load까지 대기 (domcontentloaded보다 JS 렌더링 완료에 유리)
-    await page.goto(country.baseUrl, { waitUntil: 'load', timeout }).catch(async () => {
-      await page.goto(country.baseUrl, { waitUntil: 'domcontentloaded', timeout });
+    await page.goto(inspectionBaseUrl, { waitUntil: 'load', timeout }).catch(async () => {
+      await page.goto(inspectionBaseUrl, { waitUntil: 'domcontentloaded', timeout });
     });
 
     await dismissOverlays(page);
@@ -383,7 +386,7 @@ export async function runLinkCheck(country, area, settings, options = {}) {
       return sessionResult;
     }
 
-    const allLinks = await collectLinks(page, areaSelector, country.baseUrl);
+    const allLinks = await collectLinks(page, areaSelector, inspectionBaseUrl);
     progress?.logLinksCollected(allLinks.length);
 
     if (allLinks.length === 0) {
@@ -404,6 +407,7 @@ export async function runLinkCheck(country, area, settings, options = {}) {
         sessionResult.results.push({
           ctaName: link.ctaName,
           linkPath: link.href,
+          isNewTab: link.isNewTab ?? false,
           status: 'skipped',
           reason: '검증 제외 링크 (javascript/mailto/tel/anchor)',
         });
@@ -431,6 +435,7 @@ export async function runLinkCheck(country, area, settings, options = {}) {
             sessionResult.results.push({
               ctaName: link.ctaName,
               linkPath: link.href,
+              isNewTab: link.isNewTab ?? false,
               status: 'skipped',
               reason: '외부 도메인 링크 (검증 제외 설정)',
             });

@@ -47,6 +47,23 @@ export function findCountry(countriesConfig, countryCode) {
 }
 
 /**
+ * 영역별 검사 시작 URL을 계산한다.
+ * area.path 가 있으면 country.baseUrl 뒤에 상대경로를 붙인다.
+ * @param {string} countryBaseUrl - countries.json의 baseUrl
+ * @param {string|undefined|null} areaPath - areas.json의 path (선택)
+ * @returns {string} Playwright 접속용 절대 URL
+ */
+export function resolveAreaBaseUrl(countryBaseUrl, areaPath) {
+  if (!areaPath || !String(areaPath).trim()) {
+    return countryBaseUrl;
+  }
+
+  const base = countryBaseUrl.endsWith('/') ? countryBaseUrl : `${countryBaseUrl}/`;
+  const relative = String(areaPath).trim().replace(/^\//, '');
+  return new URL(relative, base).href;
+}
+
+/**
  * 영역 ID로 영역 설정을 조회한다.
  * @param {object} areasConfig - areas.json 전체 객체
  * @param {string} areaId - 예: "GNB", "Footer"
@@ -169,7 +186,8 @@ export function printAvailableOptions(configs) {
     }
     for (const target of targets) {
       console.log(
-        `  ${area.id.padEnd(8)} | ${area.name} | ${target.deviceLabel.padEnd(6)} | ${target.selector}`
+        `  ${area.id.padEnd(8)} | ${area.name} | ${target.deviceLabel.padEnd(6)} | ${target.selector}` +
+          (area.path ? ` | path: ${area.path}` : '')
       );
     }
   }
