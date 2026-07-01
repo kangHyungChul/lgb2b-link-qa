@@ -6,7 +6,7 @@
     "verificationMode": "navigate"
   },
   "execution": {
-    "parallelCountries": false
+    "parallelCountries": true // 병렬처리 여부
   },
   "viewports": {
     "pc": {

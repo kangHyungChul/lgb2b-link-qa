@@ -21,7 +21,7 @@
       "name": "Sitemap",
       "path": "/sitemap",
       "selectors": {
-        "pc": ".CM0005B .c-sitemap",
+        "pc": ".CM0005B .c-sitemap-list",
         "mobile": ""
       }
     }
