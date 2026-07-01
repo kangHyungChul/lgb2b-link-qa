@@ -8,7 +8,7 @@
  */
 
 import { chromium } from 'playwright';
-import { shouldSkipLink, determineResult, extractPathPrefixFromBaseUrl, isBlankTarget } from './link-validator.js';
+import { shouldSkipLink, determineResult, extractPathPrefixFromBaseUrl, isBlankTarget, isAbsoluteHref } from './link-validator.js';
 import { resolveShowBrowser } from './progress-display.js';
 
 /**
@@ -458,6 +458,30 @@ export async function runLinkCheck(country, area, settings, options = {}) {
       }
 
       // 새 창(_blank) + 외부 도메인: skipExternalDomains 설정과 무관하게 검증 후 needs_check 처리
+
+      // 같은 탭 링크인데 href가 절대 URL이면 수동 확인 대상 (상대 경로 권장)
+      if (!link.isNewTab && isAbsoluteHref(link.href)) {
+        sessionResult.results.push({
+          ctaName: link.ctaName,
+          linkPath: link.href,
+          isNewTab: false,
+          status: 'needs_check',
+          reason: '같은 탭 링크에 절대 URL 사용 (상대 경로 권장)',
+          finalUrl: null,
+        });
+        sessionResult.summary.needsCheck++;
+        sessionResult.summary.total++;
+
+        progress?.logLinkResult({
+          index: linkIndex,
+          total: allLinks.length,
+          status: 'needs_check',
+          ctaName: link.ctaName,
+          href: link.href,
+          reason: '같은 탭 링크에 절대 URL',
+        });
+        continue;
+      }
 
       const result = await verifySingleLink(
         page,

@@ -29,6 +29,18 @@ export function isBlankTarget(target) {
 }
 
 /**
+ * href가 상대 경로가 아닌 절대 URL인지 판별한다.
+ * http(s):// 또는 // 로 시작하면 절대 URL로 본다.
+ * @param {string|null|undefined} href - a 태그의 href 속성값
+ * @returns {boolean} 절대 URL이면 true
+ */
+export function isAbsoluteHref(href) {
+  const trimmed = (href || '').trim();
+  if (!trimmed) return false;
+  return /^https?:\/\//i.test(trimmed) || trimmed.startsWith('//');
+}
+
+/**
  * URL에서 호스트명만 추출한다 (포트 제외, 소문자 정규화).
  * @param {string} urlString - 검사할 URL
  * @returns {string|null} 호스트명 또는 파싱 실패 시 null
